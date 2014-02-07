@@ -129,6 +129,8 @@
 
   // Parallel container for promises: turn a list of promises into the promise
   // of a list.
+  // TODO change the name to all?
+  // TODO any
   more.par = function (ps) {
     return more.fold(ps, function (z, x) {
       return z.push(x), z;
@@ -137,6 +139,8 @@
 
   // Sequential container for promises: turn a list of promises into a single
   // promise for its last value.
+  // TODO seq should enforce that promises are resolved in the given order.
+  // TODO variants (hard/soft sequence)
   more.seq = function (ps) {
     return more.fold(ps, function (z, x) {
       return typeof x === "function" ? x(z) : x;
@@ -144,7 +148,64 @@
   };
 
 
-  // Media containers
+  // Reject a promise that gets resolved. Never gets resolved.
+  more.reject = function (promise) {
+    var reject = new more.Promise();
+    promise.then(function (v) {
+      reject.reject(v);
+    });
+    return reject;
+  };
 
+  // Events
+  // Write something like:
+  //   more.seq(
+  //     more.seq(
+  //       more.event(document, "keydown", function (e) {
+  //         return e.shiftKey;
+  //       }),
+  //       more.reject(more.event(document, "keydown", function (e) {
+  //        return !e.shiftKey;
+  //       })),
+  //       more.event(canvas, "mousedown")
+  //     ),
+  //     more.events(canvas, "mousemove", function (e) {
+  //       context.beginPath();
+  //       ...
+  //     }),
+  //     more.event(canvas, "mouseup").then(function (e) {
+  //       canvas.style.cursor = "default";
+  //     })
+  //   );
+
+  // Return a promise that is resolved once the event has occurred.
+  more.event = function (target, type, p) {
+    if (typeof p !== function) {
+      p = function () {
+        return true;
+      };
+    }
+    return new more.Promise(function (resolve) {
+      var listener = function (e) {
+        if (p(e)) {
+          resolve(e);
+          target.removeEventListener(type, listener);
+        }
+      };
+      target.addEventListener(type, listener);
+    });
+  };
+
+  // Setup an event listener and return a promise that is immediately resolved.
+  // The event listener can be removed by calling unbind on the promise (e.g.
+  // from within more.seq)
+  more.events = function (target, type, listener) {
+    var promise = new more.Promise().resolve(listener);
+    target.addEventListener(type, listener);
+    promise.unbind = function () {
+      target.removeEventListener(type, listener);
+    };
+    return promise;
+  };
 
 }());
